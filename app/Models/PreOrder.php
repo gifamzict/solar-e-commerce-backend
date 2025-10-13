@@ -19,6 +19,7 @@ class PreOrder extends Model
         'warranty_period',
         'specifications',
         'images',
+        'video_url',
     ];
 
     protected $casts = [

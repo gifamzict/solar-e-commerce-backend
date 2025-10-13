@@ -19,6 +19,7 @@ class Product extends Model
         'warranty',
         'specifications',
         'images',
+        'video_url',
     ];
 
     protected $casts = [

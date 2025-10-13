@@ -119,10 +119,11 @@ class ProductController extends Controller
             'specifications' => 'nullable|array',
             'images' => 'nullable|array|max:10',
             'images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'video_url' => 'nullable|url|regex:/^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)[a-zA-Z0-9_-]{11}/',
         ]);
 
         $data = $request->only([
-            'name', 'category_id', 'price', 'stock', 'description', 'power', 'warranty', 'specifications'
+            'name', 'category_id', 'price', 'stock', 'description', 'power', 'warranty', 'specifications', 'video_url'
         ]);
 
         // Handle image uploads with better error handling
@@ -232,6 +233,55 @@ class ProductController extends Controller
     }
 
     /**
+     * Validate and normalize YouTube URL
+     */
+    private function validateYouTubeUrl($url)
+    {
+        if (empty($url)) {
+            return null;
+        }
+
+        // Extract video ID from various YouTube URL formats
+        $videoId = null;
+        
+        // Standard watch URL: https://www.youtube.com/watch?v=VIDEO_ID
+        if (preg_match('/youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/', $url, $matches)) {
+            $videoId = $matches[1];
+        }
+        // Short URL: https://youtu.be/VIDEO_ID
+        elseif (preg_match('/youtu\.be\/([a-zA-Z0-9_-]{11})/', $url, $matches)) {
+            $videoId = $matches[1];
+        }
+        // Embed URL: https://www.youtube.com/embed/VIDEO_ID
+        elseif (preg_match('/youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/', $url, $matches)) {
+            $videoId = $matches[1];
+        }
+
+        // Return normalized embed URL if valid video ID found
+        if ($videoId) {
+            return "https://www.youtube.com/embed/{$videoId}";
+        }
+
+        return null;
+    }
+
+    /**
+     * Get stock status text
+     */
+    private function getStockStatus($stock)
+    {
+        if ($stock <= 0) {
+            return 'Out of Stock';
+        } elseif ($stock <= 5) {
+            return 'Low Stock';
+        } elseif ($stock <= 20) {
+            return 'Limited Stock';
+        } else {
+            return 'In Stock';
+        }
+    }
+
+    /**
      * Display the specified resource.
      */
     public function show(Product $product)
@@ -264,10 +314,11 @@ class ProductController extends Controller
             'specifications' => 'nullable|array',
             'images' => 'nullable|array|max:10', // Allow up to 10 images
             'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'video_url' => 'nullable|url|regex:/^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)[a-zA-Z0-9_-]{11}/',
         ]);
 
         $data = $request->only([
-            'name', 'category_id', 'price', 'stock', 'description', 'power', 'warranty', 'specifications'
+            'name', 'category_id', 'price', 'stock', 'description', 'power', 'warranty', 'specifications', 'video_url'
         ]);
 
         // Handle image uploads
@@ -542,6 +593,7 @@ class ProductController extends Controller
             'images' => $product->images ? array_map(function($image) {
                 return url('storage/' . $image);
             }, $product->images) : [],
+            'video_url' => $product->video_url,
             'category' => $product->category ? [
                 'id' => $product->category->id,
                 'name' => $product->category->name,
@@ -552,21 +604,5 @@ class ProductController extends Controller
             'formatted_date' => $product->created_at->format('M d, Y'),
             'is_new' => $product->created_at->diffInDays(now()) <= 30, // Consider new if created within 30 days
         ];
-    }
-
-    /**
-     * Get stock status text
-     */
-    private function getStockStatus($stock)
-    {
-        if ($stock <= 0) {
-            return 'Out of Stock';
-        } elseif ($stock <= 5) {
-            return 'Low Stock';
-        } elseif ($stock <= 20) {
-            return 'Limited Stock';
-        } else {
-            return 'In Stock';
-        }
     }
 }

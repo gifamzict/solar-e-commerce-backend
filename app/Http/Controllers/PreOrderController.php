@@ -61,7 +61,8 @@ class PreOrderController extends Controller
             'warranty_period' => 'nullable|string|max:255',
             'specifications' => 'nullable|string',
             'images' => 'nullable|array',
-            'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048'
+            'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
+            'video_url' => 'nullable|url|regex:/^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)[a-zA-Z0-9_-]{11}/',
         ]);
 
         if ($validator->fails()) {
@@ -125,7 +126,8 @@ class PreOrderController extends Controller
             'images' => 'nullable|array',
             'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
             'remove_images' => 'nullable|array',
-            'remove_images.*' => 'string'
+            'remove_images.*' => 'string',
+            'video_url' => 'nullable|url|regex:/^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)[a-zA-Z0-9_-]{11}/',
         ]);
 
         if ($validator->fails()) {
@@ -255,5 +257,38 @@ class PreOrderController extends Controller
             'data' => $preOrders,
             'message' => 'Search results retrieved successfully'
         ]);
+    }
+
+    /**
+     * Validate and normalize YouTube URL
+     */
+    private function validateYouTubeUrl($url)
+    {
+        if (empty($url)) {
+            return null;
+        }
+
+        // Extract video ID from various YouTube URL formats
+        $videoId = null;
+        
+        // Standard watch URL: https://www.youtube.com/watch?v=VIDEO_ID
+        if (preg_match('/youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/', $url, $matches)) {
+            $videoId = $matches[1];
+        }
+        // Short URL: https://youtu.be/VIDEO_ID
+        elseif (preg_match('/youtu\.be\/([a-zA-Z0-9_-]{11})/', $url, $matches)) {
+            $videoId = $matches[1];
+        }
+        // Embed URL: https://www.youtube.com/embed/VIDEO_ID
+        elseif (preg_match('/youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/', $url, $matches)) {
+            $videoId = $matches[1];
+        }
+
+        // Return normalized embed URL if valid video ID found
+        if ($videoId) {
+            return "https://www.youtube.com/embed/{$videoId}";
+        }
+
+        return null;
     }
 }
