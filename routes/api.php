@@ -134,6 +134,7 @@ Route::prefix('admin/notifications')->group(function () {
     Route::get('/unread-count', [AdminNotificationController::class, 'getUnreadCount']); // Get unread count
     Route::get('/recent', [AdminNotificationController::class, 'getRecent']); // Get recent notifications for dropdown
     Route::get('/by-type', [AdminNotificationController::class, 'getByType']); // Get notifications grouped by type
+    
     Route::get('/{notification}', [AdminNotificationController::class, 'show']); // Get specific notification
     
     Route::patch('/{notification}/mark-read', [AdminNotificationController::class, 'markAsRead']); // Mark single as read
@@ -238,6 +239,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user/orders/recent', [UserController::class, 'getRecentOrders']);
     Route::get('/user/orders/history', [UserController::class, 'getOrderHistory']);
     Route::get('/user/orders/{orderNumber}', [UserController::class, 'getOrderDetails']);
+    
+    // Customer Address Management
+    Route::prefix('customer')->group(function () {
+        Route::get('/addresses', [App\Http\Controllers\CustomerAddressController::class, 'index']); // GET /api/customer/addresses
+        Route::post('/addresses', [App\Http\Controllers\CustomerAddressController::class, 'store']); // POST /api/customer/addresses
+        Route::get('/addresses/{id}', [App\Http\Controllers\CustomerAddressController::class, 'show']); // GET /api/customer/addresses/{id}
+        Route::put('/addresses/{id}', [App\Http\Controllers\CustomerAddressController::class, 'update']); // PUT /api/customer/addresses/{id}
+        Route::patch('/addresses/{id}', [App\Http\Controllers\CustomerAddressController::class, 'update']); // PATCH /api/customer/addresses/{id}
+        Route::delete('/addresses/{id}', [App\Http\Controllers\CustomerAddressController::class, 'destroy']); // DELETE /api/customer/addresses/{id}
+        Route::post('/addresses/{id}/set-default', [App\Http\Controllers\CustomerAddressController::class, 'setDefault']); // POST /api/customer/addresses/{id}/set-default
+    });
 });
 
 // ... (Your protected routes will go here)
