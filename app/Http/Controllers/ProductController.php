@@ -119,12 +119,24 @@ class ProductController extends Controller
             'specifications' => 'nullable|array',
             'images' => 'nullable|array|max:10',
             'images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
-            'video_url' => 'nullable|url|regex:/^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)[a-zA-Z0-9_-]{11}/',
+            'video_url' => 'nullable|url',
         ]);
 
         $data = $request->only([
-            'name', 'category_id', 'price', 'stock', 'description', 'power', 'warranty', 'specifications', 'video_url'
+            'name', 'category_id', 'price', 'stock', 'description', 'power', 'warranty', 'specifications'
         ]);
+
+        // Normalize video URL if provided
+        if ($request->filled('video_url')) {
+            $normalizedVideoUrl = $this->validateYouTubeUrl($request->video_url);
+            if ($normalizedVideoUrl === null) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors' => ['video_url' => ['The video URL must be a valid YouTube link']]
+                ], 422);
+            }
+            $data['video_url'] = $normalizedVideoUrl;
+        }
 
         // Handle image uploads with better error handling
         $imagePaths = [];
@@ -192,8 +204,9 @@ class ProductController extends Controller
         $product = Product::create($data);
 
         $response = [
+            'success' => true,
             'message' => 'Product created successfully',
-            'product' => $product->load('category'),
+            'product' => $this->formatProduct($product->load('category')),
             'images_uploaded' => count($imagePaths),
             'total_images_processed' => $request->hasFile('images') ? count($request->file('images')) : 0,
         ];
@@ -314,12 +327,24 @@ class ProductController extends Controller
             'specifications' => 'nullable|array',
             'images' => 'nullable|array|max:10', // Allow up to 10 images
             'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
-            'video_url' => 'nullable|url|regex:/^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)[a-zA-Z0-9_-]{11}/',
+            'video_url' => 'nullable|url',
         ]);
 
         $data = $request->only([
-            'name', 'category_id', 'price', 'stock', 'description', 'power', 'warranty', 'specifications', 'video_url'
+            'name', 'category_id', 'price', 'stock', 'description', 'power', 'warranty', 'specifications'
         ]);
+
+        // Normalize video URL if provided
+        if ($request->filled('video_url')) {
+            $normalizedVideoUrl = $this->validateYouTubeUrl($request->video_url);
+            if ($normalizedVideoUrl === null) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors' => ['video_url' => ['The video URL must be a valid YouTube link']]
+                ], 422);
+            }
+            $data['video_url'] = $normalizedVideoUrl;
+        }
 
         // Handle image uploads
         if ($request->hasFile('images')) {
@@ -355,8 +380,9 @@ class ProductController extends Controller
         $product->update($data);
 
         return response()->json([
+            'success' => true,
             'message' => 'Product updated successfully',
-            'product' => $product->load('category'),
+            'product' => $this->formatProduct($product->load('category')),
             'images_uploaded' => isset($data['images']) ? count($data['images']) : 0,
         ]);
     }

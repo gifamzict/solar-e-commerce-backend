@@ -17,6 +17,7 @@ use App\Http\Controllers\ContactController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\AdminNotificationController;
+use App\Http\Controllers\PickupLocationController;
 use Illuminate\Support\Facades\Route;
 
 // Public (unprotected) routes
@@ -24,6 +25,9 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/validate-email', [AuthController::class, 'validateEmail']); // Real-time email validation
 Route::get('/email/verify/{id}/{hash}', [AuthController::class, 'verify'])->name('verification.verify');
+
+// CSRF token route for SPA
+Route::get('/sanctum/csrf-cookie')->name('sanctum.csrf-cookie');
 
 // Category routes
 Route::apiResource('categories', CategoryController::class);
@@ -95,6 +99,10 @@ Route::post('/paystack/webhook', [OrderController::class, 'handleWebhook']);
 // Paystack webhook for customer pre-orders
 Route::post('/paystack/pre-order-webhook', [CustomerPreOrderController::class, 'handleWebhook']);
 
+// Webhook routes for notification providers
+Route::post('/webhooks/email/provider', [App\Http\Controllers\WebhookController::class, 'handleEmailWebhook']);
+Route::post('/webhooks/sms/provider', [App\Http\Controllers\WebhookController::class, 'handleSmsWebhook']);
+
 // Payment Management routes
 Route::get('/payments/dashboard', [PaymentController::class, 'getDashboardData']); // Payment dashboard stats
 Route::get('/payments/transactions', [PaymentController::class, 'getRecentTransactions']); // Recent transactions with pagination
@@ -127,27 +135,24 @@ Route::get('/admin/customer-pre-orders/{id}', [AdminController::class, 'getCusto
 Route::put('/admin/customer-pre-orders/{id}/status', [AdminController::class, 'updateCustomerPreOrderStatus']); // Update customer pre-order status
 Route::put('/admin/customer-pre-orders/bulk-status', [AdminController::class, 'bulkUpdateCustomerPreOrderStatus']); // Bulk update statuses
 
-// Admin notification routes
+// Customer Pre-order Notification routes (Admin only) - TEMPORARILY UNPROTECTED FOR TESTING
+Route::prefix('admin/customer-pre-orders')->group(function () {
+    Route::post('/{customerPreOrder}/notify', [App\Http\Controllers\Admin\CustomerPreOrderNotificationController::class, 'sendNotification']); // Send notification
+    Route::get('/{customerPreOrder}/notifications', [App\Http\Controllers\Admin\CustomerPreOrderNotificationController::class, 'getNotifications']); // Get notifications for pre-order
+});
+
+// Admin Notification Management routes - TEMPORARILY UNPROTECTED FOR TESTING
 Route::prefix('admin/notifications')->group(function () {
-    Route::get('/', [AdminNotificationController::class, 'index']); // Get all notifications with filters
-    Route::get('/stats', [AdminNotificationController::class, 'getStats']); // Get notification statistics
-    Route::get('/unread-count', [AdminNotificationController::class, 'getUnreadCount']); // Get unread count
-    Route::get('/recent', [AdminNotificationController::class, 'getRecent']); // Get recent notifications for dropdown
-    Route::get('/by-type', [AdminNotificationController::class, 'getByType']); // Get notifications grouped by type
+    // Specific routes first (to avoid conflicts with {notification} parameter)
+    Route::get('/merge-tags', [App\Http\Controllers\Admin\CustomerPreOrderNotificationController::class, 'getMergeTags']); // Get available merge tags
+    Route::get('/unread-count', [AdminNotificationController::class, 'getUnreadCount']); // Get unread count - MOVED HERE
+    Route::get('/stats', [AdminNotificationController::class, 'getStats']); // Get notification statistics - MOVED HERE
+    Route::get('/recent', [AdminNotificationController::class, 'getRecent']); // Get recent notifications - MOVED HERE
+    Route::get('/by-type', [AdminNotificationController::class, 'getByType']); // Get notifications grouped by type - MOVED HERE
     
-    Route::get('/{notification}', [AdminNotificationController::class, 'show']); // Get specific notification
-    
-    Route::patch('/{notification}/mark-read', [AdminNotificationController::class, 'markAsRead']); // Mark single as read
-    Route::patch('/{notification}/mark-unread', [AdminNotificationController::class, 'markAsUnread']); // Mark single as unread
-    Route::patch('/mark-multiple-read', [AdminNotificationController::class, 'markMultipleAsRead']); // Mark multiple as read
-    Route::patch('/mark-all-read', [AdminNotificationController::class, 'markAllAsRead']); // Mark all as read
-    
-    Route::delete('/{notification}', [AdminNotificationController::class, 'destroy']); // Delete single notification
-    Route::delete('/delete-multiple', [AdminNotificationController::class, 'deleteMultiple']); // Delete multiple notifications
-    Route::delete('/delete-old', [AdminNotificationController::class, 'deleteOld']); // Delete old notifications
-    
-    // Test endpoint for development
-    Route::post('/test', [AdminNotificationController::class, 'createTestNotification']); // Create test notification
+    // Generic routes with parameters last
+    Route::get('/{notification}', [App\Http\Controllers\Admin\CustomerPreOrderNotificationController::class, 'getNotification']); // Get notification details
+    Route::post('/{notification}/resend', [App\Http\Controllers\Admin\CustomerPreOrderNotificationController::class, 'resendNotification']); // Resend notification
 });
 
 // Contact form routes
@@ -208,6 +213,14 @@ Route::prefix('reports')->group(function () {
     Route::get('/export', [ReportsController::class, 'exportAnalytics']);
 });
 
+// Pickup Location Management API routes
+Route::apiResource('pickup-locations', PickupLocationController::class);
+// Additional pickup location routes
+Route::get('/pickup-locations-active', [PickupLocationController::class, 'getActiveLocations']); // Get active locations for frontend dropdown
+Route::get('/pickup-locations-default', [PickupLocationController::class, 'getDefault']); // Get default pickup location
+Route::patch('/pickup-locations/{pickupLocation}/set-default', [PickupLocationController::class, 'setDefault']); // Set as default
+Route::patch('/pickup-locations/{pickupLocation}/toggle-active', [PickupLocationController::class, 'toggleActive']); // Toggle active status
+
 // Inventory Management API routes
 Route::prefix('inventory')->group(function () {
     // Overview and dashboard
@@ -229,6 +242,17 @@ Route::prefix('inventory')->group(function () {
     Route::patch('/products/{product}/reorder-point', [App\Http\Controllers\InventoryController::class, 'setReorderPoint']); // Set reorder points
 });
 
+// Customer Address Management (Temporary - unprotected for testing)
+Route::prefix('customer')->group(function () {
+    Route::get('/addresses', [App\Http\Controllers\CustomerAddressController::class, 'index']); // GET /api/customer/addresses
+    Route::post('/addresses', [App\Http\Controllers\CustomerAddressController::class, 'store']); // POST /api/customer/addresses
+    Route::get('/addresses/{id}', [App\Http\Controllers\CustomerAddressController::class, 'show']); // GET /api/customer/addresses/{id}
+    Route::put('/addresses/{id}', [App\Http\Controllers\CustomerAddressController::class, 'update']); // PUT /api/customer/addresses/{id}
+    Route::patch('/addresses/{id}', [App\Http\Controllers\CustomerAddressController::class, 'update']); // PATCH /api/customer/addresses/{id}
+    Route::delete('/addresses/{id}', [App\Http\Controllers\CustomerAddressController::class, 'destroy']); // DELETE /api/customer/addresses/{id}
+    Route::post('/addresses/{id}/set-default', [App\Http\Controllers\CustomerAddressController::class, 'setDefault']); // POST /api/customer/addresses/{id}/set-default
+});
+
 // User Profile and Order History routes (Protected - require authentication)
 Route::middleware('auth:sanctum')->group(function () {
     // User Profile
@@ -239,17 +263,4 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user/orders/recent', [UserController::class, 'getRecentOrders']);
     Route::get('/user/orders/history', [UserController::class, 'getOrderHistory']);
     Route::get('/user/orders/{orderNumber}', [UserController::class, 'getOrderDetails']);
-    
-    // Customer Address Management
-    Route::prefix('customer')->group(function () {
-        Route::get('/addresses', [App\Http\Controllers\CustomerAddressController::class, 'index']); // GET /api/customer/addresses
-        Route::post('/addresses', [App\Http\Controllers\CustomerAddressController::class, 'store']); // POST /api/customer/addresses
-        Route::get('/addresses/{id}', [App\Http\Controllers\CustomerAddressController::class, 'show']); // GET /api/customer/addresses/{id}
-        Route::put('/addresses/{id}', [App\Http\Controllers\CustomerAddressController::class, 'update']); // PUT /api/customer/addresses/{id}
-        Route::patch('/addresses/{id}', [App\Http\Controllers\CustomerAddressController::class, 'update']); // PATCH /api/customer/addresses/{id}
-        Route::delete('/addresses/{id}', [App\Http\Controllers\CustomerAddressController::class, 'destroy']); // DELETE /api/customer/addresses/{id}
-        Route::post('/addresses/{id}/set-default', [App\Http\Controllers\CustomerAddressController::class, 'setDefault']); // POST /api/customer/addresses/{id}/set-default
-    });
 });
-
-// ... (Your protected routes will go here)

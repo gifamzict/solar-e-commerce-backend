@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 class CustomerPreOrder extends Model
@@ -76,6 +77,14 @@ class CustomerPreOrder extends Model
     public function preOrder(): BelongsTo
     {
         return $this->belongsTo(PreOrder::class);
+    }
+
+    /**
+     * Relationship: Customer pre-order has many notifications
+     */
+    public function notifications(): HasMany
+    {
+        return $this->hasMany(Notification::class, 'customer_preorder_id');
     }
 
     /**
