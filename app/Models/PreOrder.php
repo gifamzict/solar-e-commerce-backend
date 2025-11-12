@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\Storage;
 
 class PreOrder extends Model
 {
@@ -25,10 +24,10 @@ class PreOrder extends Model
     protected $casts = [
         'pre_order_price' => 'decimal:2',
         'deposit_percentage' => 'decimal:2',
-        'images' => 'array',
+        'images' => 'array', // Now stores full URLs from cloud storage (e.g., Cloudinary, Imgbb)
     ];
 
-    protected $appends = ['image_urls', 'deposit_amount'];
+    protected $appends = ['deposit_amount'];
 
     public function category(): BelongsTo
     {
@@ -41,20 +40,6 @@ class PreOrder extends Model
     public function customerPreOrders(): HasMany
     {
         return $this->hasMany(CustomerPreOrder::class);
-    }
-
-    /**
-     * Get the full URLs for pre-order product images
-     */
-    public function getImageUrlsAttribute(): array
-    {
-        if (empty($this->images)) {
-            return [];
-        }
-
-        return array_map(function ($path) {
-            return Storage::disk('public')->url($path);
-        }, $this->images);
     }
 
     /**

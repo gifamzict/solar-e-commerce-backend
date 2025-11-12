@@ -64,7 +64,7 @@ class PreOrderController extends Controller
             'warranty_period' => 'nullable|string|max:255',
             'specifications' => 'nullable|string',
             'images' => 'nullable|array|max:10',
-            'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'images.*' => 'nullable|url', // Now accepts URLs instead of files
             'video_url' => 'nullable|url',
         ]);
 
@@ -110,17 +110,9 @@ class PreOrderController extends Controller
             $data['video_url'] = $normalizedVideoUrl;
         }
 
-        // Handle image uploads
-        if ($request->hasFile('images')) {
-            $imagePaths = [];
-            foreach ($request->file('images') as $image) {
-                if ($image && $image->isValid()) {
-                    $filename = time() . '_' . uniqid() . '_' . $image->getClientOriginalName();
-                    $path = $image->storeAs('pre-orders', $filename, 'public');
-                    $imagePaths[] = $path;
-                }
-            }
-            $data['images'] = $imagePaths;
+        // Images are now URLs, no need to upload
+        if (isset($data['images'])) {
+            $data['images'] = $data['images'];
         }
 
         $preOrder = PreOrder::create($data);
@@ -165,9 +157,7 @@ class PreOrderController extends Controller
             'warranty_period' => 'nullable|string|max:255',
             'specifications' => 'nullable|string',
             'images' => 'nullable|array|max:10',
-            'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
-            'remove_images' => 'nullable|array',
-            'remove_images.*' => 'string',
+            'images.*' => 'nullable|url', // Now accepts URLs instead of files
             'video_url' => 'nullable|url',
         ]);
 
@@ -208,35 +198,9 @@ class PreOrderController extends Controller
             $data['video_url'] = $normalizedVideoUrl;
         }
 
-        // Handle image removal
-        if ($request->has('remove_images')) {
-            $currentImages = $preOrder->images ?? [];
-            $imagesToRemove = $request->get('remove_images');
-            
-            foreach ($imagesToRemove as $imageToRemove) {
-                if (in_array($imageToRemove, $currentImages)) {
-                    Storage::disk('public')->delete($imageToRemove);
-                    $currentImages = array_diff($currentImages, [$imageToRemove]);
-                }
-            }
-            
-            $data['images'] = array_values($currentImages);
-        }
-
-        // Handle new image uploads
-        if ($request->hasFile('images')) {
-            $existingImages = $data['images'] ?? $preOrder->images ?? [];
-            $newImagePaths = [];
-            
-            foreach ($request->file('images') as $image) {
-                if ($image && $image->isValid()) {
-                    $filename = time() . '_' . uniqid() . '_' . $image->getClientOriginalName();
-                    $path = $image->storeAs('pre-orders', $filename, 'public');
-                    $newImagePaths[] = $path;
-                }
-            }
-            
-            $data['images'] = array_merge($existingImages, $newImagePaths);
+        // Images are now URLs, no need to upload or delete files
+        if ($request->has('images')) {
+            $data['images'] = $request->input('images', []);
         }
 
         $preOrder->update($data);
@@ -254,13 +218,7 @@ class PreOrderController extends Controller
      */
     public function destroy(PreOrder $preOrder): JsonResponse
     {
-        // Delete associated images
-        if ($preOrder->images) {
-            foreach ($preOrder->images as $imagePath) {
-                Storage::disk('public')->delete($imagePath);
-            }
-        }
-
+        // Images are stored in cloud storage, no need to delete from local storage
         $preOrder->delete();
 
         return response()->json([

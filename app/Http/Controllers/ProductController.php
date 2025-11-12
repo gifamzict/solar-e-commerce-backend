@@ -99,14 +99,7 @@ class ProductController extends Controller
      */
     public function store(Request $request)
     {
-        // Debug: Log incoming request data
-        \Log::info('Product store request data:', [
-            'has_images' => $request->hasFile('images'),
-            'images_count' => $request->hasFile('images') ? count($request->file('images')) : 0,
-            'request_all' => $request->all(),
-            'php_max_upload' => ini_get('upload_max_filesize'),
-            'php_max_post' => ini_get('post_max_size'),
-        ]);
+        \Log::info('Product store request data:', $request->all());
 
         $request->validate([
             'name' => 'required|string|max:255',
@@ -118,12 +111,12 @@ class ProductController extends Controller
             'warranty' => 'nullable|string|max:255',
             'specifications' => 'nullable|array',
             'images' => 'nullable|array|max:10',
-            'images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'images.*' => 'nullable|url', // Now accepts URLs instead of files
             'video_url' => 'nullable|url',
         ]);
 
         $data = $request->only([
-            'name', 'category_id', 'price', 'stock', 'description', 'power', 'warranty', 'specifications'
+            'name', 'category_id', 'price', 'stock', 'description', 'power', 'warranty', 'specifications', 'images'
         ]);
 
         // Normalize video URL if provided
@@ -138,85 +131,16 @@ class ProductController extends Controller
             $data['video_url'] = $normalizedVideoUrl;
         }
 
-        // Handle image uploads with better error handling
-        $imagePaths = [];
-        $uploadErrors = [];
-        
-        if ($request->hasFile('images')) {
-            $images = $request->file('images');
-            
-            // Ensure images is an array
-            if (!is_array($images)) {
-                $images = [$images];
-            }
-
-            \Log::info('Processing ' . count($images) . ' images for upload');
-
-            foreach ($images as $index => $image) {
-                \Log::info("Processing image {$index}:", [
-                    'original_name' => $image ? $image->getClientOriginalName() : 'null',
-                    'size' => $image ? $image->getSize() : 'null',
-                    'mime_type' => $image ? $image->getMimeType() : 'null',
-                    'is_valid' => $image ? $image->isValid() : false,
-                    'error_code' => $image ? $image->getError() : 'null'
-                ]);
-
-                // Check if image exists and is valid
-                if ($image && $image->isValid()) {
-                    try {
-                        // Additional size check (5MB = 5120KB)
-                        $maxSize = 5 * 1024 * 1024; // 5MB in bytes
-                        if ($image->getSize() > $maxSize) {
-                            $uploadErrors[] = "Image " . ($index + 1) . " (" . $image->getClientOriginalName() . "): File size " . round($image->getSize() / 1024 / 1024, 2) . "MB exceeds maximum allowed size of 5MB";
-                            \Log::warning("Image {$index} exceeds size limit: " . $image->getSize() . " bytes");
-                            continue;
-                        }
-
-                        $filename = time() . '_' . $index . '_' . $image->getClientOriginalName();
-                        $path = $image->storeAs('products', $filename, 'public');
-                        $imagePaths[] = $path;
-                        
-                        \Log::info("Successfully stored image {$index}: {$path}");
-                    } catch (\Exception $e) {
-                        $uploadErrors[] = "Image " . ($index + 1) . " (" . ($image->getClientOriginalName() ?? 'unknown') . "): " . $e->getMessage();
-                        \Log::error("Failed to store image {$index}: " . $e->getMessage());
-                    }
-                } else {
-                    if ($image) {
-                        $error = $image->getError();
-                        $errorMessage = $this->getUploadErrorMessage($error);
-                        $fileName = $image->getClientOriginalName() ?? 'unknown';
-                        $uploadErrors[] = "Image " . ($index + 1) . " ({$fileName}): {$errorMessage}";
-                        \Log::error("Image {$index} upload error: {$errorMessage} (Error code: {$error})");
-                    } else {
-                        $uploadErrors[] = "Image " . ($index + 1) . ": No file received or file is null";
-                        \Log::warning("Image {$index} is null or empty");
-                    }
-                }
-            }
-        }
-
-        $data['images'] = $imagePaths;
-
-        \Log::info('Final image paths to store:', $imagePaths);
-        \Log::info('Upload errors:', $uploadErrors);
+        // Images are now URLs, no need to upload
+        $data['images'] = $request->input('images', []);
 
         $product = Product::create($data);
 
-        $response = [
+        return response()->json([
             'success' => true,
             'message' => 'Product created successfully',
             'product' => $this->formatProduct($product->load('category')),
-            'images_uploaded' => count($imagePaths),
-            'total_images_processed' => $request->hasFile('images') ? count($request->file('images')) : 0,
-        ];
-
-        if (!empty($uploadErrors)) {
-            $response['upload_errors'] = $uploadErrors;
-            $response['message'] = 'Product created with some image upload issues';
-        }
-
-        return response()->json($response, 201);
+        ], 201);
     }
 
     /**
@@ -309,12 +233,7 @@ class ProductController extends Controller
      */
     public function update(Request $request, Product $product)
     {
-        // Debug: Log incoming request data
-        \Log::info('Product update request data:', [
-            'has_images' => $request->hasFile('images'),
-            'images_count' => $request->hasFile('images') ? count($request->file('images')) : 0,
-            'all_files' => $request->allFiles(),
-        ]);
+        \Log::info('Product update request data:', $request->all());
 
         $request->validate([
             'name' => 'required|string|max:255',
@@ -325,13 +244,13 @@ class ProductController extends Controller
             'power' => 'nullable|string|max:255',
             'warranty' => 'nullable|string|max:255',
             'specifications' => 'nullable|array',
-            'images' => 'nullable|array|max:10', // Allow up to 10 images
-            'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'images' => 'nullable|array|max:10',
+            'images.*' => 'nullable|url', // Now accepts URLs instead of files
             'video_url' => 'nullable|url',
         ]);
 
         $data = $request->only([
-            'name', 'category_id', 'price', 'stock', 'description', 'power', 'warranty', 'specifications'
+            'name', 'category_id', 'price', 'stock', 'description', 'power', 'warranty', 'specifications', 'images'
         ]);
 
         // Normalize video URL if provided
@@ -346,35 +265,9 @@ class ProductController extends Controller
             $data['video_url'] = $normalizedVideoUrl;
         }
 
-        // Handle image uploads
-        if ($request->hasFile('images')) {
-            // Delete old images
-            if ($product->images) {
-                foreach ($product->images as $oldImage) {
-                    Storage::disk('public')->delete($oldImage);
-                }
-            }
-
-            $imagePaths = [];
-            $images = $request->file('images');
-            
-            // Ensure images is an array
-            if (!is_array($images)) {
-                $images = [$images];
-            }
-
-            foreach ($images as $index => $image) {
-                if ($image && $image->isValid()) {
-                    $filename = time() . '_' . $index . '_' . $image->getClientOriginalName();
-                    $path = $image->storeAs('products', $filename, 'public');
-                    $imagePaths[] = $path;
-                    
-                    \Log::info("Updated/Stored image {$index}: {$path}");
-                }
-            }
-            
-            $data['images'] = $imagePaths;
-            \Log::info('Final image paths to update:', $imagePaths);
+        // Images are now URLs, no need to upload or delete old files
+        if ($request->has('images')) {
+            $data['images'] = $request->input('images', []);
         }
 
         $product->update($data);
@@ -383,7 +276,6 @@ class ProductController extends Controller
             'success' => true,
             'message' => 'Product updated successfully',
             'product' => $this->formatProduct($product->load('category')),
-            'images_uploaded' => isset($data['images']) ? count($data['images']) : 0,
         ]);
     }
 
@@ -392,13 +284,7 @@ class ProductController extends Controller
      */
     public function destroy(Product $product)
     {
-        // Delete images
-        if ($product->images) {
-            foreach ($product->images as $image) {
-                Storage::disk('public')->delete($image);
-            }
-        }
-
+        // Images are stored in cloud storage, no need to delete from local storage
         $product->delete();
 
         return response()->json([
