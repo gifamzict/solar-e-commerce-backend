@@ -2,10 +2,22 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Storage;
 
 Route::get('/', function () {
     return view('welcome');
 });
+
+// Serve storage files when using php artisan serve
+Route::get('/storage/{path}', function ($path) {
+    $file = Storage::disk('public')->path($path);
+    
+    if (!file_exists($file)) {
+        abort(404);
+    }
+    
+    return response()->file($file);
+})->where('path', '.*');
 
 // One-time route to create superadmin
 Route::get('/create-superadmin-once', function () {
